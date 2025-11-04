@@ -1,0 +1,13 @@
+# 仮想環境
+venv/
+.env
+
+# Pythonキャッシュ
+__pycache__/
+*.pyc
+
+# データベースファイル
+database.db
+
+# アップロードされた画像ファイル
+uploads/

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐱 猫の健康モニタリングダッシュボード</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 { 
+            text-align: center; 
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .upload-section { 
+            margin-bottom: 30px; 
+            padding: 25px; 
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            background: #f8f9ff;
+            transition: all 0.3s;
+        }
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f1ff;
+        }
+        .upload-section h2 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        input[type="file"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            margin-left: 10px;
+        }
+        #data-status {
+            text-align: center;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .chart-container { 
+            margin-top: 30px; 
+            padding: 20px; 
+            border-radius: 12px;
+            background: #f8f9fa;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .chart-container h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        canvas {
+            background: white;
+            border-radius: 8px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-box strong {
+            color: #667eea;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 猫のおしっこ画像解析ダッシュボード</h1>
+        <p class="subtitle">Python + OpenCV による高精度画像解析</p>
+
+        <div class="info-box">
+            <strong>📌 使い方:</strong> 100円玉と一緒に撮影したおしっこの画像をアップロードしてください。
+            100円玉をスケール基準として、正確な排尿量（mm²）を計測します。
+        </div>
+
+        <div class="upload-section">
+            <h2>📷 新規画像アップロード</h2>
+            <form id="uploadForm">
+                <input type="file" id="fileInput" name="file" accept="image/*" required>
+                <button type="submit" id="uploadBtn">解析して追加</button>
+                <button type="button" class="btn-danger" onclick="clearAllData()">全データ削除</button>
+            </form>
+        </div>
+
+        <div id="data-status" class="status-warning">データを読み込み中...</div>
+
+        <div class="stats-grid" id="statsGrid" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-label">記録数</div>
+                <div class="stat-value" id="totalRecords">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">平均排尿量</div>
+                <div class="stat-value" id="avgArea">-</div>
+                <div class="stat-label">mm²</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">平均濃度（L値）</div>
+                <div class="stat-value" id="avgL">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">平均標準偏差</div>
+                <div class="stat-value" id="avgStd">-</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h3>📊 排尿量 (mm²) の推移</h3>
+            <canvas id="areaChart"></canvas>
+        </div>
+        
+        <div class="chart-container">
+            <h3>📊 濃淡 (平均L値) の推移</h3>
+            <canvas id="lValueChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3>📊 濃淡の安定性 (L値標準偏差) の推移</h3>
+            <canvas id="stdChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let chartInstances = {};
+
+        // ページ読み込み時
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            
+            // フォーム送信
+            document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await uploadImage();
+            });
+        });
+
+        // データ取得
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    showStatus('⚠️ データがありません。画像をアップロードしてください。', 'warning');
+                    document.getElementById('statsGrid').style.display = 'none';
+                    return;
+                }
+
+                showStatus(`✅ 過去 ${data.length} 件のデータを読み込みました`, 'success');
+                updateDisplay(data);
+                updateStats();
+
+            } catch (error) {
+                showStatus('❌ データ取得エラー: ' + error.message, 'error');
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // 画像アップロード
+        async function uploadImage() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            if (!file) {
+                showStatus('画像ファイルを選択してください', 'warning');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // ボタンを無効化
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="spinner"></span> 解析中...';
+            showStatus('⏳ 画像を解析中... しばらくお待ちください', 'info');
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('✅ 解析完了！データを追加しました', 'success');
+                    fileInput.value = '';
+                    fetchData(); // データ再読み込み
+                } else {
+                    showStatus('❌ ' + (result.error || '解析に失敗しました'), 'error');
+                }
+
+            } catch (error) {
+                showStatus('❌ エラー: ' + error.message, 'error');
+                console.error('Upload error:', error);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '解析して追加';
+            }
+        }
+
+        // 表示更新
+        function updateDisplay(data) {
+            document.getElementById('statsGrid').style.display = 'grid';
+
+            const labels = data.map((d, i) => `#${i + 1}`);
+            const areaData = data.map(d => d.area_mm2);
+            const lData = data.map(d => d.avg_l_value);
+            const stdData = data.map(d => d.std_l_value);
+
+            drawChart('areaChart', labels, areaData, '排尿量 (mm²)', 'rgba(54, 162, 235, 1)');
+            drawChart('lValueChart', labels, lData, '濃淡 (平均L値)', 'rgba(75, 192, 192, 1)');
+            drawChart('stdChart', labels, stdData, '濃淡の安定性 (標準偏差)', 'rgba(255, 99, 132, 1)');
+        }
+
+        // 統計更新
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+
+                document.getElementById('totalRecords').textContent = stats.count;
+                document.getElementById('avgArea').textContent = stats.avg_area.toLocaleString();
+                document.getElementById('avgL').textContent = stats.avg_l_value;
+                document.getElementById('avgStd').textContent = stats.avg_std;
+            } catch (error) {
+                console.error('Stats error:', error);
+            }
+        }
+
+        // グラフ描画
+        function drawChart(canvasId, labels, data, label, color) {
+            const ctx = document.getElementById(canvasId);
+
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+
+            chartInstances[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color.replace('1)', '0.1)'),
+                        borderWidth: 3,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ステータス表示
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('data-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+        }
+
+        // 全データ削除
+        async function clearAllData() {
+            if (!confirm('すべてのデータを削除してもよろしいですか？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/clear', {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus('✅ ' + result.message, 'success');
+                    fetchData();
+                } else {
+                    showStatus('❌ ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ エラー: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
