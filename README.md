@@ -157,7 +157,7 @@ MIT License
 ## 👤 作成者
 
 あなたの名前
-- GitHub: [@izumi601](https://github.com/yourusername)
+- GitHub:(https://github.com/izumi601/cat_urinepro/tree/main)
 
 ## 🙏 謝辞
 
