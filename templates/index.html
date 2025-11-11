@@ -227,194 +227,225 @@
     </div>
 
     <script>
-        let chartInstances = {};
+        // index.html の <script> タグ内の修正コード
 
-        // ページ読み込み時
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchData();
-            
-            // フォーム送信
-            document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await uploadImage();
-            });
+let chartInstances = {};
+
+// ページ読み込み時
+document.addEventListener('DOMContentLoaded', () => {
+    fetchData();
+    
+    // フォーム送信
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await uploadImage();
+    });
+});
+
+// データ取得
+async function fetchData() {
+    try {
+        const response = await fetch('/api/data');
+        const data = await response.json();
+
+        // サーバーがエラーオブジェクトを返した場合のチェック（最重要）
+        if (!Array.isArray(data)) {
+             // data.map is not a function エラーはここで発生していた可能性が高い
+            const errorMessage = data.error || 'サーバーから配列ではないデータが返されました。';
+            throw new Error(errorMessage);
+        }
+
+        if (data.length === 0) {
+            showStatus('⚠️ データがありません。画像をアップロードしてください。', 'warning');
+            document.getElementById('statsGrid').style.display = 'none';
+            return;
+        }
+
+        showStatus(`✅ 過去 ${data.length} 件のデータを読み込みました`, 'success');
+        updateDisplay(data);
+        updateStats(); // 統計情報は別途APIを叩く
+
+    } catch (error) {
+        // Renderの起動時のエラーがここを通る可能性が高い
+        const displayMessage = error.message.includes("Failed to fetch") 
+            ? "❌ サーバー起動中/データベース接続エラー。しばらく待ってリロードしてください。" 
+            : '❌ データ取得エラー: ' + error.message;
+        
+        showStatus(displayMessage, 'error');
+        console.error('Error fetching data:', error);
+    }
+}
+
+// 画像アップロード
+async function uploadImage() {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    if (!file) {
+        showStatus('画像ファイルを選択してください', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // ボタンを無効化
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<span class="spinner"></span> 解析中...';
+    showStatus('⏳ 画像を解析中... しばらくお待ちください', 'info');
+
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
         });
 
-        // データ取得
-        async function fetchData() {
-            try {
-                const response = await fetch('/api/data');
-                const data = await response.json();
+        // サーバーからの応答をJSONとしてパース
+        const result = await response.json();
 
-                if (data.length === 0) {
-                    showStatus('⚠️ データがありません。画像をアップロードしてください。', 'warning');
-                    document.getElementById('statsGrid').style.display = 'none';
-                    return;
+        // サーバーからエラー応答が返された場合の処理
+        if (response.status !== 200 || result.error) {
+            // エラーは /upload エンドポイントのサーバー側で発生
+            throw new Error(result.error || '解析に失敗しました');
+        }
+
+        // 成功した場合
+        showStatus('✅ 解析完了！データを追加しました', 'success');
+        fileInput.value = '';
+        fetchData(); // データ再読み込み
+
+    } catch (error) {
+        showStatus('❌ ' + error.message, 'error');
+        console.error('Upload error:', error);
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = '解析して追加';
+    }
+}
+
+// 表示更新
+function updateDisplay(data) {
+    document.getElementById('statsGrid').style.display = 'grid';
+
+    // day_idではなく、シンプルな連番をラベルに使うことで視認性を高める
+    const labels = data.map((d, i) => `Day ${i + 1}`); 
+    const areaData = data.map(d => d.area_mm2);
+    const lData = data.map(d => d.avg_l_value);
+    const stdData = data.map(d => d.std_l_value);
+
+    drawChart('areaChart', labels, areaData, '排尿量 (mm²)', 'rgba(54, 162, 235, 1)');
+    drawChart('lValueChart', labels, lData, '濃淡 (平均L値)', 'rgba(75, 192, 192, 1)');
+    drawChart('stdChart', labels, stdData, '濃淡の安定性 (標準偏差)', 'rgba(255, 99, 132, 1)');
+}
+
+
+// 統計更新 (この関数は /api/stats が存在することを前提とします)
+async function updateStats() {
+    // 統計APIが未実装の場合、この関数はエラーになるため注意
+    try {
+        const response = await fetch('/api/data'); // /api/statsがないため、/api/dataから統計を計算
+        const data = await response.json();
+        
+        if (!Array.isArray(data) || data.length === 0) return;
+
+        const areaValues = data.map(d => d.area_mm2).filter(v => v !== null);
+        const lValues = data.map(d => d.avg_l_value).filter(v => v !== null);
+        const stdValues = data.map(d => d.std_l_value).filter(v => v !== null);
+
+        const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+        const avg = (arr) => arr.length ? (sum(arr) / arr.length).toFixed(2) : '-';
+
+        document.getElementById('totalRecords').textContent = data.length;
+        document.getElementById('avgArea').textContent = avg(areaValues);
+        document.getElementById('avgL').textContent = avg(lValues);
+        document.getElementById('avgStd').textContent = avg(stdValues);
+
+    } catch (error) {
+        console.error('Stats update error:', error);
+    }
+}
+
+// グラフ描画
+function drawChart(canvasId, labels, data, label, color) {
+    const ctx = document.getElementById(canvasId);
+
+    if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
+    }
+    // ... (以下、drawChart関数の本体は変更なし) ...
+    chartInstances[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: data,
+                borderColor: color,
+                backgroundColor: color.replace('1)', '0.1)'),
+                borderWidth: 3,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
                 }
-
-                showStatus(`✅ 過去 ${data.length} 件のデータを読み込みました`, 'success');
-                updateDisplay(data);
-                updateStats();
-
-            } catch (error) {
-                showStatus('❌ データ取得エラー: ' + error.message, 'error');
-                console.error('Error fetching data:', error);
-            }
-        }
-
-        // 画像アップロード
-        async function uploadImage() {
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-            const uploadBtn = document.getElementById('uploadBtn');
-
-            if (!file) {
-                showStatus('画像ファイルを選択してください', 'warning');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            // ボタンを無効化
-            uploadBtn.disabled = true;
-            uploadBtn.innerHTML = '<span class="spinner"></span> 解析中...';
-            showStatus('⏳ 画像を解析中... しばらくお待ちください', 'info');
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showStatus('✅ 解析完了！データを追加しました', 'success');
-                    fileInput.value = '';
-                    fetchData(); // データ再読み込み
-                } else {
-                    showStatus('❌ ' + (result.error || '解析に失敗しました'), 'error');
-                }
-
-            } catch (error) {
-                showStatus('❌ エラー: ' + error.message, 'error');
-                console.error('Upload error:', error);
-            } finally {
-                uploadBtn.disabled = false;
-                uploadBtn.textContent = '解析して追加';
-            }
-        }
-
-        // 表示更新
-        function updateDisplay(data) {
-            document.getElementById('statsGrid').style.display = 'grid';
-
-            const labels = data.map((d, i) => `#${i + 1}`);
-            const areaData = data.map(d => d.area_mm2);
-            const lData = data.map(d => d.avg_l_value);
-            const stdData = data.map(d => d.std_l_value);
-
-            drawChart('areaChart', labels, areaData, '排尿量 (mm²)', 'rgba(54, 162, 235, 1)');
-            drawChart('lValueChart', labels, lData, '濃淡 (平均L値)', 'rgba(75, 192, 192, 1)');
-            drawChart('stdChart', labels, stdData, '濃淡の安定性 (標準偏差)', 'rgba(255, 99, 132, 1)');
-        }
-
-        // 統計更新
-        async function updateStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const stats = await response.json();
-
-                document.getElementById('totalRecords').textContent = stats.count;
-                document.getElementById('avgArea').textContent = stats.avg_area.toLocaleString();
-                document.getElementById('avgL').textContent = stats.avg_l_value;
-                document.getElementById('avgStd').textContent = stats.avg_std;
-            } catch (error) {
-                console.error('Stats error:', error);
-            }
-        }
-
-        // グラフ描画
-        function drawChart(canvasId, labels, data, label, color) {
-            const ctx = document.getElementById(canvasId);
-
-            if (chartInstances[canvasId]) {
-                chartInstances[canvasId].destroy();
-            }
-
-            chartInstances[canvasId] = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: label,
-                        data: data,
-                        borderColor: color,
-                        backgroundColor: color.replace('1)', '0.1)'),
-                        borderWidth: 3,
-                        pointRadius: 5,
-                        pointHoverRadius: 7,
-                        tension: 0.3,
-                        fill: true
-                    }]
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        }
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
                     }
                 }
-            });
-        }
-
-        // ステータス表示
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('data-status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status-${type}`;
-        }
-
-        // 全データ削除
-        async function clearAllData() {
-            if (!confirm('すべてのデータを削除してもよろしいですか？')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/clear', {
-                    method: 'POST'
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    showStatus('✅ ' + result.message, 'success');
-                    fetchData();
-                } else {
-                    showStatus('❌ ' + result.error, 'error');
-                }
-            } catch (error) {
-                showStatus('❌ エラー: ' + error.message, 'error');
             }
         }
+    });
+}
+
+// ステータス表示
+function showStatus(message, type) {
+    const statusDiv = document.getElementById('data-status');
+    statusDiv.textContent = message;
+    statusDiv.className = `status-${type}`;
+}
+
+// 全データ削除 (サーバー側にも /api/clear エンドポイントが必要です)
+async function clearAllData() {
+    if (!confirm('すべてのデータを削除してもよろしいですか？')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/clear', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showStatus('✅ ' + result.message, 'success');
+            fetchData();
+        } else {
+            showStatus('❌ ' + (result.error || '削除に失敗しました'), 'error');
+        }
+    } catch (error) {
+        showStatus('❌ エラー: ' + error.message, 'error');
+    }
+}
     </script>
 </body>
 </html>

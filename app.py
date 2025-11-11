@@ -88,26 +88,26 @@ def index():
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    """データベースから全データを取得し、JSONで返すAPIエンドポイント"""
     session = Session()
     try:
-        # データベースから全てのデータを取得
         data = session.query(UrineData).all()
 
-        # データをJSON形式に変換し、results に代入
+        # ここで results はリスト（配列）として作成されている
         results = [
             {
                 'day_id': d.day_id,
-                # Pythonのfloat(NaNなど)がJSONでエラーにならないよう処理
-                'area_mm2': d.area_mm2, 
+                'area_mm2': d.area_mm2,
                 'avg_l_value': d.avg_l_value,
                 'std_l_value': d.std_l_value
             } for d in data
         ]
-        return jsonify(results)
+        
+        # リスト（配列）を JSON で返す
+        return jsonify(results) 
         
     except Exception as e:
         print(f"APIデータ取得エラー: {e}")
+        # 例外が発生した場合、{"error": "..."} というオブジェクトを返す
         return jsonify({'error': 'データ取得中に内部エラーが発生しました。'}), 500
     finally:
         session.close()
