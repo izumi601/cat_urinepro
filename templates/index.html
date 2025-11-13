@@ -172,11 +172,27 @@
 <body>
     <div class="container">
         <h1>🐱 猫のおしっこ画像解析ダッシュボード</h1>
-        <p class="subtitle">Python + OpenCV による高精度画像解析</p>
+        <p class="subtitle">Python + OpenCV による画像解析</p>
 
         <div class="info-box">
             <strong>📌 使い方:</strong> 100円玉と一緒に撮影したおしっこの画像をアップロードしてください。
             100円玉をスケール基準として、正確な排尿量（mm²）を計測します。
+        </div>
+        <div class="info-box" style="border-left: 4px solid #f5576c; background: #fff8f8;">
+            <strong>🌟 プロジェクトの概要と目的</strong>
+            <p style="margin-top: 5px; color: #333;">
+                このアプリは、**猫の泌尿器系トラブル（腎臓病、尿石症など）**の**早期発見**を目的とした健康モニタリングダッシュボードです。
+                日々の**排尿量と尿の濃淡**のデータを統計的に分析し、その猫自身の異常値からの変化を見抜きます。
+            </p>
+        </div>
+
+        <div class="info-box" style="border-left: 4px solid #764ba2; background: #f8f9ff;">
+            <strong>🧠 技術的ハイライト (アピールポイント)</strong>
+            <ul style="padding-left: 20px; margin-top: 5px; color: #333;">
+                <li>**高精度な画像解析 (OpenCV)**: 100円玉を検出し、mm²単位で排尿量を正確に算出。</li>
+                <li>**統計的異常検知 (NumPy)**: Zスコア法 (<span style="font-style: italic;">&mu;</span> ± 2<span style="font-style: italic;">&sigma;</span>) を用い、猫個体のベースラインに基づき排尿量と濃淡の異常値を判定。</li>
+                <li>**フルスタック開発**: Python/Flask (バックエンド)、SQLite (DB)、Chart.js (可視化) を組み合わせた構成。</li>
+            </ul>
         </div>
 
         <div class="upload-section">
