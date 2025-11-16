@@ -61,12 +61,14 @@ pip install -r requirements.txt
 
 ### 4. フォルダ構成の確認
 ```
-cat-urinepro/
-├── app.py                 # Flaskアプリケーション
-├── analysis.py            # 画像解析モジュール
-├── requirements.txt       # 依存関係
-├── templates/
-│   └── index.html        # フロントエンド
+cat_urinepro/
+├── app.py
+├── analysis.py
+├── data/
+│   ├── raw_data.csv      
+│   └── cleaned_data.csv  
+├── README.md             
+└── initial_images/
 ```
 
 ## 🚀 使い方
