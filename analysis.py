@@ -1,11 +1,15 @@
-# analysis.py
 import cv2
 import numpy as np
 import os
+import pandas as pd
+from datetime import datetime, timedelta
 
 # 100円玉の直径（mm）
 COIN_DIAMETER_MM = 22.6
 
+# ==========================================
+# 画像解析の処理
+# ==========================================
 def process_image(image_path):
     """
     画像パスを受け取り、尿の解析結果を返します。
@@ -115,19 +119,44 @@ def process_image(image_path):
             'error': f'解析エラー: {str(e)}'
         }
 
+# ==========================================
+# 画像ファイルを処理してCSVに追加
+# ==========================================
+def process_images_in_directory(image_dir):
+    """
+    指定されたディレクトリ内の画像を処理し、結果をCSVに保存する
+    
+    Args:
+        image_dir (str): 画像ファイルが格納されているディレクトリパス
+    """
+    data = []
 
-def validate_image(image_path):
-    """
-    画像ファイルが有効かチェック
-    """
-    if not os.path.exists(image_path):
-        return False, "ファイルが存在しません"
-    
-    # サポートされる拡張子
-    valid_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
-    ext = os.path.splitext(image_path)[1].lower()
-    
-    if ext not in valid_extensions:
-        return False, f"サポートされていない形式です（{', '.join(valid_extensions)}のみ対応）"
-    
-    return True, None
+    # ディレクトリ内の画像を一つずつ処理
+    for image_filename in os.listdir(image_dir):
+        image_path = os.path.join(image_dir, image_filename)
+        
+        if not validate_image(image_path)[0]:
+            continue
+
+        result = process_image(image_path)
+
+        if result['success']:
+            data.append(result)
+
+    # 結果をデータフレームに変換
+    df = pd.DataFrame(data)
+
+    # CSVファイルとして保存
+    df.to_csv('data/raw_data.csv', index=False)
+    print("✓ raw_data.csv を生成しました")
+
+    # 測定エラーを除外したデータ（cleaned_data.csv）
+    cleaned_df = df[df['success'] == True].copy()
+    cleaned_df.to_csv('data/cleaned_data.csv', index=False)
+    print(f"✓ cleaned_data.csv を生成しました（{len(df) - len(cleaned_df)}件除外）")
+
+# 画像ディレクトリの指定
+image_directory = 'initial_images/'
+
+# 画像を処理してCSVを生成
+process_images_in_directory(image_directory)
