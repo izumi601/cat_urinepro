@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 import os
 
-from analysis import process_image 
+from analysis import process_image, validate_image
 
 # ----------------------------------------------------
 # 1. データベースのセットアップ (SQLiteを使用)
