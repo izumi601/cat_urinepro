@@ -8,27 +8,14 @@ from datetime import datetime, timedelta
 COIN_DIAMETER_MM = 22.6
 
 # ==========================================
-# 画像解析の処理
+# 1. 画像解析の処理 (process_image)
 # ==========================================
 def process_image(image_path):
     """
     画像パスを受け取り、尿の解析結果を返します。
-    
-    Args:
-        image_path (str): 解析する画像のパス
-    
-    Returns:
-        dict: 解析結果 {
-            'day_id': str,
-            'area_mm2': float,
-            'avg_l_value': float,
-            'std_l_value': float,
-            'success': bool,
-            'error': str (optional)
-        }
     """
     try:
-        print(f"--- INFO: Analysing image: {image_path} ---")
+        # print(f"--- INFO: Analysing image: {image_path} ---") # Renderのログを減らすためコメントアウト
         
         # 画像の読み込み
         img = cv2.imread(image_path)
@@ -39,20 +26,14 @@ def process_image(image_path):
                 'error': '画像の読み込みに失敗しました'
             }
 
-        # HSVに変換
+        # --- 尿の領域検出 ---
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-        # シミ領域を抽出するための色範囲（黄色）
-        lower_bound = np.array([20, 50, 50])
-        upper_bound = np.array([40, 255, 255])
-
-        # マスク作成
+        lower_bound = np.array([20, 50, 50]) # 黄色の下限
+        upper_bound = np.array([40, 255, 255]) # 黄色の上限
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
+        area_pixel = np.sum(mask > 0) # シミ領域のピクセル数
 
-        # 面積を計算（シミ領域のピクセル数）
-        area_pixel = np.sum(mask > 0)
-
-        # Hough Circlesでコインの検出とスケール換算
+        # --- スケール換算（コイン検出） ---
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         circles = cv2.HoughCircles(
             gray, 
@@ -69,27 +50,22 @@ def process_image(image_path):
         area_mm2 = None
 
         if circles is not None:
-            circle_radius = circles[0][0][2]  # 半径（px）
+            circle_radius = circles[0][0][2]
             px_per_mm = circle_radius / (COIN_DIAMETER_MM / 2)
 
             if px_per_mm > 0:
-                # 物理的なシミ面積mm²に換算
                 area_mm2 = area_pixel / (px_per_mm ** 2)
 
-        # 濃淡の（L値）の定量化（Lab利用）
+        # --- 濃淡の定量化（L値） ---
         lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        l_channel = lab[:, :, 0]  # L (Lightness/明るさ) チャンネルを取得
-
-        # マスクを使ってシミ部分のL値を抽出
+        l_channel = lab[:, :, 0]
         l_values_in_urine = l_channel[mask > 0]
 
         avg_l_value = None
         std_l_value = None
 
         if len(l_values_in_urine) > 0:
-            # シミ部分のL値の平均（濃淡）
             avg_l_value = float(np.mean(l_values_in_urine))
-            # シミ部分のL値の標準偏差（濃淡の分布の狭さ/安定性）
             std_l_value = float(np.std(l_values_in_urine))
 
         # ファイル名から day_id を抽出
@@ -109,25 +85,43 @@ def process_image(image_path):
         else:
             return {
                 'success': False,
-                'error': '100円玉が検出できませんでした。画像に100円玉が写っているか確認してください。'
+                'error': '100円玉が検出できませんでした。'
             }
 
     except Exception as e:
-        print(f"ERROR: {str(e)}")
+        # print(f"ERROR: {str(e)}") # Renderのログを減らすためコメントアウト
         return {
             'success': False,
             'error': f'解析エラー: {str(e)}'
         }
 
 # ==========================================
-# 画像ファイルを処理してCSVに追加
+# 2. 画像の事前検証関数 (validate_image)
+#    - process_images_in_directory より前に定義
+# ==========================================
+def validate_image(image_path):
+    """
+    ファイルが画像であり、解析に適しているか検証する。
+    """
+    # 拡張子チェック
+    if not (image_path.lower().endswith('.png') or 
+            image_path.lower().endswith('.jpg') or
+            image_path.lower().endswith('.jpeg')):
+        return False, "非画像ファイルです"
+
+    # ファイルサイズチェック（任意）
+    if os.path.getsize(image_path) < 1024: # 1KB未満は小さすぎる
+        return False, "ファイルサイズが小さすぎます"
+    
+    return True, "OK"
+
+
+# ==========================================
+# 3. ディレクトリ内の画像処理（app.pyから呼ばれる）
 # ==========================================
 def process_images_in_directory(image_dir):
     """
-    指定されたディレクトリ内の画像を処理し、結果をCSVに保存する
-    
-    Args:
-        image_dir (str): 画像ファイルが格納されているディレクトリパス
+    指定されたディレクトリ内の画像を処理し、成功した結果のリストを返します。
     """
     data = []
 
@@ -135,28 +129,40 @@ def process_images_in_directory(image_dir):
     for image_filename in os.listdir(image_dir):
         image_path = os.path.join(image_dir, image_filename)
         
-        if not validate_image(image_path)[0]:
+        # 呼び出しより前に validate_image が定義されているため、NameErrorは出ない
+        is_valid, reason = validate_image(image_path) 
+        if not is_valid:
+            # print(f"SKIP: {image_filename} - {reason}")
             continue
 
         result = process_image(image_path)
 
         if result['success']:
             data.append(result)
+        # else:
+            # print(f"FAIL: {image_filename} - {result['error']}")
 
-    # 結果をデータフレームに変換
-    df = pd.DataFrame(data)
+    return data
 
-    # CSVファイルとして保存
-    df.to_csv('data/raw_data.csv', index=False)
-    print("✓ raw_data.csv を生成しました")
 
-    # 測定エラーを除外したデータ（cleaned_data.csv）
-    cleaned_df = df[df['success'] == True].copy()
-    cleaned_df.to_csv('data/cleaned_data.csv', index=False)
-    print(f"✓ cleaned_data.csv を生成しました（{len(df) - len(cleaned_df)}件除外）")
-
-# 画像ディレクトリの指定
-image_directory = 'initial_images/'
-
-# 画像を処理してCSVを生成
-process_images_in_directory(image_directory)
+# ==========================================
+# 4. ローカルテスト用の実行ブロック (Renderデプロイでは実行されない)
+# ==========================================
+if __name__ == '__main__':
+    # 注意: このブロックはローカルテスト専用です。
+    # Renderで実行されるのは app.py の初期化ロジックです。
+    print("--- Analysis Script Local Test Start ---")
+    
+    image_directory = 'initial_images'
+    if not os.path.exists(image_directory):
+        print(f"WARN: 初期画像フォルダ '{image_directory}' が見つかりません。")
+        
+    initial_results = process_images_in_directory(image_directory)
+    print(f"分析完了。成功したレコード数: {len(initial_results)}")
+    
+    if initial_results:
+        df = pd.DataFrame(initial_results)
+        # ローカルでの動作確認用に出力
+        # df.to_csv('local_test_results.csv', index=False)
+        print("ローカルテスト結果のデータ構造確認済み。")
+    print("--- Analysis Script Local Test End ---")
