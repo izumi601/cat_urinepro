@@ -1,5 +1,8 @@
 # 🐱 猫の健康モニタリングダッシュボード
 
+<img width="1439" height="960" alt="スクリーンショット 2025-11-17 3 43 09" src="https://github.com/user-attachments/assets/82fdeb30-88d8-428a-8c1b-fd585327c6c6" />
+
+
 Python + OpenCV による猫のおしっこ画像解析システム
 
 ## 📋 プロジェクト概要
